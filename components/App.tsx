@@ -94,22 +94,42 @@ export default function App() {
   }, [selectedLines, filter, searchTerm]);
 
   async function handleImportFile(file: File) {
+    // Step 1: read & parse the file itself. Failures here are really about
+    // the file (unreadable, wrong format, no recognizable columns).
+    let parsed: ReturnType<typeof parseWorkbook>;
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
-      const parsed = parseWorkbook(wb);
-      if (!parsed || !parsed.lines.length) {
-        setModal({
-          type: "error",
-          message: "Aucune ligne reconnue dans ce fichier. Vérifie qu’il contient bien les colonnes Date, Libellé, Débit et Crédit.",
-        });
-        return;
-      }
+      parsed = parseWorkbook(wb);
+    } catch {
+      setModal({ type: "error", message: "Ce fichier n’a pas pu être lu. Vérifie qu’il s’agit bien d’un fichier Excel (.xlsx), et qu’il n’est pas protégé par un mot de passe." });
+      return;
+    }
+    if (!parsed || !parsed.lines.length) {
+      setModal({
+        type: "error",
+        message: "Aucune ligne reconnue dans ce fichier. Vérifie qu’il contient bien les colonnes Date, Libellé, Débit et Crédit.",
+      });
+      return;
+    }
+
+    // Step 2: check what's already stored, against Firestore. Failures here
+    // are almost always security-rules/permissions issues, not the file —
+    // give a message that actually points at the real cause.
+    try {
       const groups = groupIntoStatements(parsed.lines);
       const preview = await computeImportPreview(groups);
       setModal({ type: "import", fileName: file.name, groups: preview });
-    } catch {
-      setModal({ type: "error", message: "Ce fichier n’a pas pu être lu. Vérifie qu’il s’agit bien d’un fichier Excel (.xlsx)." });
+    } catch (err) {
+      const code = (err as { code?: string })?.code || "";
+      if (code.includes("permission-denied")) {
+        setModal({
+          type: "error",
+          message: "Le fichier a bien été lu, mais Firestore refuse l'accès. Vérifie que ton email est bien dans firestore.rules et que les règles ont été déployées (firebase deploy --only firestore:rules,storage:rules).",
+        });
+      } else {
+        setModal({ type: "error", message: "Le fichier a bien été lu, mais la connexion à la base de données a échoué. Vérifie ta connexion et réessaie." });
+      }
     }
   }
 

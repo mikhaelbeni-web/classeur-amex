@@ -1,14 +1,11 @@
 rules_version = '2';
 
 // Accès restreint aux deux personnes qui utilisent l'outil.
-// Remplace ces adresses par les vôtres (celles utilisées pour se connecter
-// avec Firebase Authentication), puis redéploie les règles :
-//   firebase deploy --only firestore:rules
 function isAllowed() {
   return request.auth != null &&
     request.auth.token.email in [
       'gestion@beylev.com',
-'compta@beylev.com'
+      'compta@beylev.com'
     ];
 }
 
@@ -20,6 +17,15 @@ service cloud.firestore {
       match /lines/{lineId} {
         allow read, write: if isAllowed();
       }
+    }
+
+    // Nécessaire en plus de la règle ci-dessus : une requête collectionGroup
+    // (utilisée pour écouter TOUTES les lignes de TOUS les relevés à la fois)
+    // n'est couverte que par une règle avec le wildcard récursif {path=**}.
+    // Sans elle, Firestore refuse la requête même si les documents sont
+    // par ailleurs lisibles un par un.
+    match /{path=**}/lines/{lineId} {
+      allow read, write: if isAllowed();
     }
   }
 }

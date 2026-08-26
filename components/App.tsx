@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import type { Line, LineStatus, Statement } from "@/lib/types";
+import type { Line, LineStatus, Statement, ParsedLine } from "@/lib/types";
 import { parseWorkbook, groupIntoStatements } from "@/lib/xlsxParse";
+import { parseAmexPdf } from "@/lib/pdfParse";
 import {
   subscribeStatements,
   subscribeAllLines,
@@ -96,19 +97,35 @@ export default function App() {
   async function handleImportFile(file: File) {
     // Step 1: read & parse the file itself. Failures here are really about
     // the file (unreadable, wrong format, no recognizable columns).
-    let parsed: ReturnType<typeof parseWorkbook>;
+    // Two source formats are supported: the accountant's Excel export, and
+    // the official Amex PDF statement — routed by extension.
+    const isPdf = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
+    let lines: ParsedLine[];
     try {
       const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
-      parsed = parseWorkbook(wb);
-    } catch {
-      setModal({ type: "error", message: "Ce fichier n’a pas pu être lu. Vérifie qu’il s’agit bien d’un fichier Excel (.xlsx), et qu’il n’est pas protégé par un mot de passe." });
-      return;
-    }
-    if (!parsed || !parsed.lines.length) {
+      if (isPdf) {
+        lines = await parseAmexPdf(buf);
+      } else {
+        const wb = XLSX.read(buf, { type: "array" });
+        const parsed = parseWorkbook(wb);
+        lines = parsed?.lines ?? [];
+      }
+    } catch (err) {
+      console.error("import parse failed:", err);
       setModal({
         type: "error",
-        message: "Aucune ligne reconnue dans ce fichier. Vérifie qu’il contient bien les colonnes Date, Libellé, Débit et Crédit.",
+        message: isPdf
+          ? "Ce PDF n'a pas pu être lu. Vérifie qu'il s'agit bien du relevé de compte Amex (pas un autre document), et qu'il n'est pas protégé par un mot de passe."
+          : "Ce fichier n'a pas pu être lu. Vérifie qu'il s'agit bien d'un fichier Excel (.xlsx), et qu'il n'est pas protégé par un mot de passe.",
+      });
+      return;
+    }
+    if (!lines.length) {
+      setModal({
+        type: "error",
+        message: isPdf
+          ? "Aucune ligne de transaction reconnue dans ce PDF. Vérifie qu'il s'agit bien du relevé de compte complet (pas un extrait ou une capture d'écran)."
+          : "Aucune ligne reconnue dans ce fichier. Vérifie qu'il contient bien les colonnes Date, Libellé, Débit et Crédit.",
       });
       return;
     }
@@ -117,7 +134,7 @@ export default function App() {
     // are almost always security-rules/permissions issues, not the file —
     // give a message that actually points at the real cause.
     try {
-      const groups = groupIntoStatements(parsed.lines);
+      const groups = groupIntoStatements(lines);
       const preview = await computeImportPreview(groups);
       setModal({ type: "import", fileName: file.name, groups: preview });
     } catch (err) {
@@ -143,7 +160,7 @@ export default function App() {
       setModal({ type: "none" });
       showToast(`${total} nouvelle${total > 1 ? "s" : ""} ligne${total > 1 ? "s" : ""} importée${total > 1 ? "s" : ""}.`);
     } catch {
-      showToast("L’import a échoué — réessaie.");
+      showToast("L'import a échoué — réessaie.");
     } finally {
       setImportBusy(false);
     }
@@ -154,7 +171,8 @@ export default function App() {
     const line = selectedLines.find((l) => l.id === lineId);
     try {
       await attachAsset(selectedId, lineId, file, line?.asset || null);
-    } catch {
+    } catch (err) {
+      console.error("attachAsset failed:", err);
       showToast("Envoi du justificatif impossible — réessaie.");
     }
   }
@@ -241,7 +259,7 @@ export default function App() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".xlsx,.xls"
+          accept=".xlsx,.xls,.pdf"
           style={{ display: "none" }}
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -267,11 +285,11 @@ export default function App() {
         <main className="content">
           {!selectedStatement ? (
             <div className="empty-state">
-              <div className="display">{statements.length ? "Sélectionne un relevé" : "Aucun relevé pour l’instant"}</div>
+              <div className="display">{statements.length ? "Sélectionne un relevé" : "Aucun relevé pour l'instant"}</div>
               <p>
                 {statements.length
                   ? "Choisis un relevé dans la liste à gauche pour voir ses lignes et ses justificatifs."
-                  : "Importe le fichier Excel du relevé Amex : chaque ligne apparaîtra ici, prête à recevoir son justificatif."}
+                  : "Importe le relevé Amex (Excel de ta comptable ou PDF téléchargé depuis Amex) : chaque ligne apparaîtra ici, prête à recevoir son justificatif."}
               </p>
               {!statements.length && (
                 <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>

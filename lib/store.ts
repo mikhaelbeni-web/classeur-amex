@@ -11,13 +11,8 @@ import {
   orderBy,
   type Unsubscribe,
 } from "firebase/firestore";
-import {
-  ref as storageRef,
-  uploadBytes,
-  deleteObject,
-  getBlob,
-} from "firebase/storage";
-import { db, storage } from "./firebase";
+import { db } from "./firebase";
+import { supabase, JUSTIFICATIFS_BUCKET } from "./supabase";
 import type { Asset, Line, LineStatus, Statement } from "./types";
 import type { ParsedGroup } from "./types";
 import { lineFingerprint } from "./xlsxParse";
@@ -146,9 +141,10 @@ export async function renameStatement(statementId: string, label: string) {
 }
 
 export async function deleteStatement(statementId: string, lines: Line[]) {
-  await Promise.all(
-    lines.filter((l) => l.asset).map((l) => deleteObject(storageRef(storage, l.asset!.path)).catch(() => {}))
-  );
+  const paths = lines.filter((l) => l.asset).map((l) => l.asset!.path);
+  if (paths.length) {
+    await supabase.storage.from(JUSTIFICATIFS_BUCKET).remove(paths).catch(() => {});
+  }
   const batch = writeBatch(db);
   for (const l of lines) {
     batch.delete(doc(db, "statements", statementId, "lines", l.id));
@@ -212,23 +208,30 @@ async function maybeDownscaleImage(file: File): Promise<File> {
 export async function attachAsset(statementId: string, lineId: string, rawFile: File, previousAsset: Asset | null) {
   const file = await maybeDownscaleImage(rawFile);
   const ext = extOf(file.name, file.type);
-  const path = `justificatifs/${lineId}/${uid()}.${ext}`;
-  await uploadBytes(storageRef(storage, path), file, { contentType: file.type || "application/octet-stream" });
+  const path = `${lineId}/${uid()}.${ext}`;
+  const { error } = await supabase.storage
+    .from(JUSTIFICATIFS_BUCKET)
+    .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
+  if (error) throw error;
   if (previousAsset) {
-    await deleteObject(storageRef(storage, previousAsset.path)).catch(() => {});
+    await supabase.storage.from(JUSTIFICATIFS_BUCKET).remove([previousAsset.path]).catch(() => {});
   }
   const asset: Asset = { path, filename: rawFile.name, size: file.size, type: file.type };
   await updateDoc(doc(db, "statements", statementId, "lines", lineId), { asset });
 }
 
 export async function removeAsset(statementId: string, lineId: string, asset: Asset) {
-  await deleteObject(storageRef(storage, asset.path)).catch(() => {});
+  await supabase.storage.from(JUSTIFICATIFS_BUCKET).remove([asset.path]).catch(() => {});
   await updateDoc(doc(db, "statements", statementId, "lines", lineId), { asset: null });
 }
 
-/** Fetches a justificatif's bytes through the authenticated Storage SDK
- *  (rather than a public download URL) so access still goes through
- *  storage.rules on every read. */
+/** Fetches a justificatif's bytes through the Supabase Storage SDK. Note:
+ *  unlike the Firebase-only design, access control here relies on the
+ *  app's Firebase-Auth login gate plus unguessable (UUID) file paths,
+ *  not per-request server-side enforcement — see the README's "Sécurité
+ *  du stockage" section for the tradeoff and how to harden it later. */
 export async function fetchAssetBlob(path: string): Promise<Blob> {
-  return getBlob(storageRef(storage, path));
+  const { data, error } = await supabase.storage.from(JUSTIFICATIFS_BUCKET).download(path);
+  if (error || !data) throw error || new Error("download failed");
+  return data;
 }

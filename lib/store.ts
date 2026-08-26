@@ -8,7 +8,6 @@ import {
   getDocs,
   serverTimestamp,
   query,
-  orderBy,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -27,10 +26,19 @@ function uid(): string {
 --------------------------------------------------------------------- */
 
 export function subscribeStatements(cb: (statements: Statement[]) => void): Unsubscribe {
-  const q = query(collection(db, "statements"), orderBy("year", "desc"), orderBy("month", "desc"));
-  return onSnapshot(q, (snap) => {
-    cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Statement, "id">) })));
-  });
+  // Sorted client-side (rather than via a two-field orderBy in the query)
+  // so this never needs a Firestore composite index to be created manually.
+  return onSnapshot(
+    collection(db, "statements"),
+    (snap) => {
+      const statements = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Statement, "id">) }));
+      statements.sort((a, b) => b.year * 12 + b.month - (a.year * 12 + a.month));
+      cb(statements);
+    },
+    (err) => {
+      console.error("subscribeStatements failed:", err);
+    }
+  );
 }
 
 /**
@@ -56,6 +64,8 @@ export function subscribeAllLines(cb: (linesByStatement: Record<string, Line[]>)
       lines.sort((a, b) => a.dateRaw.localeCompare(b.dateRaw));
     }
     cb(grouped);
+  }, (err) => {
+    console.error("subscribeAllLines failed:", err);
   });
 }
 

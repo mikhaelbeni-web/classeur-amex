@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// Accès restreint aux deux personnes qui utilisent l'outil.
+// Remplace ces adresses par les vôtres (celles utilisées pour se connecter
+// avec Firebase Authentication), puis redéploie les règles :
+//   firebase deploy --only firestore:rules
+function isAllowed() {
+  return request.auth != null &&
+    request.auth.token.email in [
+      'toi@example.com',
+      'comptable@example.com'
+    ];
+}
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /statements/{statementId} {
+      allow read, write: if isAllowed();
+
+      match /lines/{lineId} {
+        allow read, write: if isAllowed();
+      }
+    }
+  }
+}

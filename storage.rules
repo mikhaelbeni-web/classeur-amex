@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// Mêmes deux adresses que dans firestore.rules — garde-les synchronisées.
+function isAllowed() {
+  return request.auth != null &&
+    request.auth.token.email in [
+      'toi@example.com',
+      'comptable@example.com'
+    ];
+}
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /justificatifs/{lineId}/{fileName} {
+      // 20 Mo max par justificatif, lecture/écriture réservées aux deux comptes.
+      allow read: if isAllowed();
+      allow write: if isAllowed() && request.resource.size < 20 * 1024 * 1024;
+      allow delete: if isAllowed();
+    }
+  }
+}

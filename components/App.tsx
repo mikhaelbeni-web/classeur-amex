@@ -159,7 +159,8 @@ export default function App() {
       if (firstNew) setSelectedId(firstNew.id);
       setModal({ type: "none" });
       showToast(`${total} nouvelle${total > 1 ? "s" : ""} ligne${total > 1 ? "s" : ""} importée${total > 1 ? "s" : ""}.`);
-    } catch {
+        } catch (err) {
+      console.error("applyImport failed:", err);
       showToast("L'import a échoué — réessaie.");
     } finally {
       setImportBusy(false);

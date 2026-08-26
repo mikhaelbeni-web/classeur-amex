@@ -100,18 +100,14 @@ export async function applyImport(groups: ImportPreviewGroup[]): Promise<number>
     const newLines = g.lines.filter((l) => !existingFps.has(lineFingerprint(l)));
     if (!newLines.length) continue;
 
-    const batch = writeBatch(db);
+        const batch = writeBatch(db);
     const statementRef = doc(db, "statements", g.id);
-    batch.set(
-      statementRef,
-      {
-        label: g.label,
-        year: g.year,
-        month: g.month,
-        importedAt: linesSnap.empty ? serverTimestamp() : undefined,
-      },
-      { merge: true }
-    );
+    // Firestore rejette une valeur de champ `undefined` explicite, donc on
+    // n'inclut "importedAt" dans l'écriture que quand il a une vraie valeur
+    // (premier import de ce relevé) — sinon ça plante à chaque réimport.
+    const statementData: Record<string, unknown> = { label: g.label, year: g.year, month: g.month };
+    if (linesSnap.empty) statementData.importedAt = serverTimestamp();
+    batch.set(statementRef, statementData, { merge: true });
     for (const l of newLines) {
       const lineRef = doc(db, "statements", g.id, "lines", uid());
       batch.set(lineRef, {

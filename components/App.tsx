@@ -25,6 +25,18 @@ import LineRow from "./LineRow";
 import ImportModal from "./ImportModal";
 import { RenameModal, DeleteStatementModal, ErrorModal, PreviewModal } from "./ConfirmModals";
 
+/** Best-effort mime type from a filename's extension, used when the stored
+ *  asset has no (or an unreliable) type — see handleViewAttach. */
+function guessMime(filename: string): string {
+  const ext = (filename.split(".").pop() || "").toLowerCase();
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "png") return "image/png";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "webp") return "image/webp";
+  if (ext === "gif") return "image/gif";
+  return "application/octet-stream";
+}
+
 type Filter = "all" | "noattach" | "manquant";
 type ModalState =
   | { type: "none" }
@@ -43,7 +55,7 @@ export default function App() {
   const [modal, setModal] = useState<ModalState>({ type: "none" });
   const [importBusy, setImportBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ asset: Asset; url: string } | null>(null);
+  const [preview, setPreview] = useState<{ asset: Asset; url?: string; pdfData?: ArrayBuffer } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -116,8 +128,8 @@ export default function App() {
       setModal({
         type: "error",
         message: isPdf
-          ? "Ce PDF n'a pas pu être lu. Vérifie qu'il s'agit bien du relevé de compte Amex (pas un autre document), et qu'il n'est pas protégé par un mot de passe."
-          : "Ce fichier n'a pas pu être lu. Vérifie qu'il s'agit bien d'un fichier Excel (.xlsx), et qu'il n'est pas protégé par un mot de passe.",
+          ? "Ce PDF n’a pas pu être lu. Vérifie qu’il s’agit bien du relevé de compte Amex (pas un autre document), et qu’il n’est pas protégé par un mot de passe."
+          : "Ce fichier n’a pas pu être lu. Vérifie qu’il s’agit bien d’un fichier Excel (.xlsx), et qu’il n’est pas protégé par un mot de passe.",
       });
       return;
     }
@@ -125,8 +137,8 @@ export default function App() {
       setModal({
         type: "error",
         message: isPdf
-          ? "Aucune ligne de transaction reconnue dans ce PDF. Vérifie qu'il s'agit bien du relevé de compte complet (pas un extrait ou une capture d'écran)."
-          : "Aucune ligne reconnue dans ce fichier. Vérifie qu'il contient bien les colonnes Date, Libellé, Débit et Crédit.",
+          ? "Aucune ligne de transaction reconnue dans ce PDF. Vérifie qu’il s’agit bien du relevé de compte complet (pas un extrait ou une capture d’écran)."
+          : "Aucune ligne reconnue dans ce fichier. Vérifie qu’il contient bien les colonnes Date, Libellé, Débit et Crédit.",
       });
       return;
     }
@@ -162,7 +174,7 @@ export default function App() {
       showToast(`${total} nouvelle${total > 1 ? "s" : ""} ligne${total > 1 ? "s" : ""} importée${total > 1 ? "s" : ""}.`);
     } catch (err) {
       console.error("applyImport failed:", err);
-      showToast("L'import a échoué — réessaie.");
+      showToast("L’import a échoué — réessaie.");
     } finally {
       setImportBusy(false);
     }
@@ -200,24 +212,34 @@ export default function App() {
     await removeAsset(selectedId, line.id, asset, line.assets || []).catch(() => showToast("Suppression impossible."));
   }
 
-  /** Shows a justificatif in an in-app preview (image or PDF) instead of
-   *  forcing a download. Deliberately NOT using window.open + a blob: URL:
-   *  a blob URL is only valid in the browsing context that created it, and
-   *  handing it to a separately-opened tab is unreliable across browsers
-   *  (shows up as a blank page). Rendering it in this same document's
-   *  <img>/<iframe> sidesteps that entirely. */
+  /** Shows a justificatif in an in-app preview instead of forcing a
+   *  download. Images use an <img> on an object URL — that works the same
+   *  in every browser. PDFs are NOT handed to the browser's native PDF
+   *  viewer via <iframe>: not every browser/PC has one enabled (Chrome even
+   *  has a setting to force-download PDFs instead of opening them), which
+   *  would silently break the preview depending on the machine. Instead
+   *  PdfViewer draws the pages itself with pdf.js onto <canvas>, so it looks
+   *  and works identically everywhere, with nothing to install. */
   async function handleViewAttach(asset: Asset) {
     try {
-      const blob = await fetchAssetBlob(asset.path);
-      const url = URL.createObjectURL(blob);
-      setPreview({ asset, url });
-    } catch {
+      const raw = await fetchAssetBlob(asset.path);
+      const mime = asset.type || guessMime(asset.filename);
+      if (/^image\//.test(mime)) {
+        const blob = raw.type === mime ? raw : new Blob([raw], { type: mime });
+        const url = URL.createObjectURL(blob);
+        setPreview({ asset, url });
+      } else {
+        const pdfData = await raw.arrayBuffer();
+        setPreview({ asset, pdfData });
+      }
+    } catch (err) {
+      console.error("preview failed:", err);
       showToast("Aperçu impossible.");
     }
   }
 
   function closePreview() {
-    if (preview) URL.revokeObjectURL(preview.url);
+    if (preview?.url) URL.revokeObjectURL(preview.url);
     setPreview(null);
   }
 
@@ -327,7 +349,7 @@ export default function App() {
         <main className="content">
           {!selectedStatement ? (
             <div className="empty-state">
-              <div className="display">{statements.length ? "Sélectionne un relevé" : "Aucun relevé pour l'instant"}</div>
+              <div className="display">{statements.length ? "Sélectionne un relevé" : "Aucun relevé pour l’instant"}</div>
               <p>
                 {statements.length
                   ? "Choisis un relevé dans la liste à gauche pour voir ses lignes et ses justificatifs."
@@ -454,8 +476,9 @@ export default function App() {
       {preview && (
         <PreviewModal
           filename={preview.asset.filename}
+          isImage={!!preview.url}
           url={preview.url}
-          isImage={/^image\//.test(preview.asset.type || "")}
+          pdfData={preview.pdfData}
           onClose={closePreview}
           onDownload={() => handleDownloadAttach(preview.asset)}
         />

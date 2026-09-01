@@ -53,7 +53,7 @@ function AttachChip({
         setThumbUrl(objectUrl);
       })
       .catch(() => {
-        /* thumbnail is a nice-to-have, fall back to the icon silently */
+        /* thumbnail is a nice-to-have; silently fall back to the icon */
       });
     return () => {
       cancelled = true;
@@ -116,8 +116,10 @@ export default function LineRow({ line, onAttach, onRemoveAttach, onViewAttach, 
 
   return (
     <tr>
-      <td className="mono">{fmtEntryDate(line.dateRaw)}</td>
-      <td className="libelle-cell">
+      <td className="mono" data-label="Date">
+        {fmtEntryDate(line.dateRaw)}
+      </td>
+      <td className="libelle-cell" data-label="Libellé">
         <div className="libelle">{line.libelle}</div>
         <div className="sub">
           {line.reference ? `Réf. ${line.reference}` : ""}
@@ -134,9 +136,13 @@ export default function LineRow({ line, onAttach, onRemoveAttach, onViewAttach, 
           }}
         />
       </td>
-      <td className="num mono amount-debit">{fmtAmount(line.debit)}</td>
-      <td className="num mono amount-credit">{fmtAmount(line.credit)}</td>
-      <td>
+      <td className="num mono amount-debit" data-label="Débit">
+        {fmtAmount(line.debit)}
+      </td>
+      <td className="num mono amount-credit" data-label="Crédit">
+        {fmtAmount(line.credit)}
+      </td>
+      <td data-label="Justificatif">
         <div className="attach-list">
           {assets.map((asset) => (
             <AttachChip
@@ -163,7 +169,7 @@ export default function LineRow({ line, onAttach, onRemoveAttach, onViewAttach, 
           />
         </div>
       </td>
-      <td>
+      <td data-label="Statut">
         <select
           className={`status-select st-${line.status}`}
           aria-label="Statut"

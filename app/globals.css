@@ -207,9 +207,66 @@ select.status-select.st-manquant { background-color: var(--bad-soft); color: var
 .toast { background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 999px; font-size: 0.84rem; font-weight: 500; box-shadow: var(--shadow); }
 
 @media (max-width: 760px) {
+  /* Topbar: let it wrap onto a second line instead of forcing a horizontal
+     scrollbar — on an iPhone-width screen, brand + stat pills + both
+     buttons never fit on one row. */
+  .topbar { flex-wrap: wrap; padding: 10px 14px; row-gap: 8px; }
+  .brand { width: 100%; margin-right: 0; }
+  .brand h1 { font-size: 1.12rem; }
+  .stat-pill { font-size: 0.72rem; padding: 4px 9px; }
+  .btn { padding: 7px 11px; font-size: 0.8rem; }
+
   .layout { flex-direction: column; }
-  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--line); display: flex; overflow-x: auto; padding: 10px; }
+  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--line); display: flex; overflow-x: auto; padding: 8px 10px; gap: 6px; }
   .sidebar-title { display: none; }
-  .statement-item { flex: none; min-width: 150px; }
-  table.lines { min-width: 640px; }
+  .statement-item { flex: none; min-width: 128px; padding: 8px 10px; }
+  .statement-item .label { font-size: 0.82rem; }
+  .statement-item .meta { font-size: 0.7rem; }
+
+  .content-toolbar { padding: 12px 14px 10px; }
+  .table-wrap { padding: 0 14px 20px; }
+
+  /* The 6-column table doesn't fit an iPhone screen at any font size, so
+     below this width it stops being a table altogether: each row becomes
+     its own card, and each cell stacks as a labelled value (the label
+     comes from data-label, set in LineRow.tsx) instead of a column. */
+  table.lines,
+  table.lines thead,
+  table.lines tbody,
+  table.lines tr,
+  table.lines th,
+  table.lines td {
+    display: block;
+    width: 100%;
+  }
+  table.lines { min-width: 0; }
+  table.lines thead { display: none; }
+  table.lines tbody tr {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    background: var(--surface);
+  }
+  table.lines td {
+    padding: 7px 0;
+    border: none;
+    text-align: left;
+  }
+  table.lines td.num { text-align: left; }
+  table.lines td:not(:last-child) { border-bottom: 1px dashed var(--line); }
+  table.lines td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-faint);
+    font-weight: 600;
+    margin-bottom: 3px;
+  }
+  .attach-chip { max-width: 100%; }
+
+  .modal { padding: 18px; max-height: 90vh; }
+  .modal-preview { width: 96vw; height: 92vh; }
 }

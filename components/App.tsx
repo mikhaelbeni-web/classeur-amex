@@ -23,7 +23,7 @@ import { useSignOut } from "./AuthGate";
 import Sidebar from "./Sidebar";
 import LineRow from "./LineRow";
 import ImportModal from "./ImportModal";
-import { RenameModal, DeleteStatementModal, ErrorModal } from "./ConfirmModals";
+import { RenameModal, DeleteStatementModal, ErrorModal, PreviewModal } from "./ConfirmModals";
 
 type Filter = "all" | "noattach" | "manquant";
 type ModalState =
@@ -43,6 +43,7 @@ export default function App() {
   const [modal, setModal] = useState<ModalState>({ type: "none" });
   const [importBusy, setImportBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ asset: Asset; url: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -167,14 +168,30 @@ export default function App() {
     }
   }
 
-  async function handleAttach(lineId: string, file: File) {
+  async function handleAttach(lineId: string, files: File[]) {
     if (!selectedId) return;
     const line = selectedLines.find((l) => l.id === lineId);
-    try {
-      await attachAsset(selectedId, lineId, file, line?.assets || []);
-    } catch (err) {
-      console.error("attachAsset failed:", err);
-      showToast("Envoi du justificatif impossible — réessaie.");
+    // Uploaded one at a time, on purpose: each write stores the FULL
+    // updated list of justificatifs, so the next upload in this same batch
+    // must start from what the previous one just produced — not from the
+    // (now stale) list captured before the batch began.
+    let current = line?.assets || [];
+    let failures = 0;
+    for (const file of files) {
+      try {
+        const asset = await attachAsset(selectedId, lineId, file, current);
+        current = [...current, asset];
+      } catch (err) {
+        console.error("attachAsset failed:", err);
+        failures++;
+      }
+    }
+    if (failures) {
+      showToast(
+        failures === files.length
+          ? "Envoi du justificatif impossible — réessaie."
+          : `${failures} fichier${failures > 1 ? "s n'ont" : " n'a"} pas pu être envoyé${failures > 1 ? "s" : ""} — réessaie.`
+      );
     }
   }
 
@@ -183,27 +200,25 @@ export default function App() {
     await removeAsset(selectedId, line.id, asset, line.assets || []).catch(() => showToast("Suppression impossible."));
   }
 
-  /** Opens a justificatif for preview in a new tab (PDFs and images both
-   *  display inline in the browser) — no forced download. The tab has to
-   *  be opened synchronously, before the async fetch, or popup blockers
-   *  kill it; we then point that already-open tab at the blob once ready. */
+  /** Shows a justificatif in an in-app preview (image or PDF) instead of
+   *  forcing a download. Deliberately NOT using window.open + a blob: URL:
+   *  a blob URL is only valid in the browsing context that created it, and
+   *  handing it to a separately-opened tab is unreliable across browsers
+   *  (shows up as a blank page). Rendering it in this same document's
+   *  <img>/<iframe> sidesteps that entirely. */
   async function handleViewAttach(asset: Asset) {
-    const win = window.open("", "_blank");
     try {
       const blob = await fetchAssetBlob(asset.path);
       const url = URL.createObjectURL(blob);
-      if (win) {
-        win.location.href = url;
-      } else {
-        // Popup was blocked outright — fall back to a download so the
-        // click isn't a dead end.
-        handleDownloadBlob(url, asset.filename);
-      }
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setPreview({ asset, url });
     } catch {
-      win?.close();
       showToast("Aperçu impossible.");
     }
+  }
+
+  function closePreview() {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
   }
 
   function handleDownloadBlob(url: string, filename: string) {
@@ -435,6 +450,16 @@ export default function App() {
         />
       )}
       {modal.type === "error" && <ErrorModal message={modal.message} onClose={() => setModal({ type: "none" })} />}
+
+      {preview && (
+        <PreviewModal
+          filename={preview.asset.filename}
+          url={preview.url}
+          isImage={/^image\//.test(preview.asset.type || "")}
+          onClose={closePreview}
+          onDownload={() => handleDownloadAttach(preview.asset)}
+        />
+      )}
 
       {toast && (
         <div className="toast-wrap">

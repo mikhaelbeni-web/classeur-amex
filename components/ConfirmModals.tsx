@@ -45,7 +45,7 @@ export function DeleteStatementModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-    const withAsset = lines.reduce((n, l) => n + (l.assets?.length || 0), 0);
+  const withAsset = lines.reduce((n, l) => n + (l.assets?.length || 0), 0);
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -61,6 +61,47 @@ export function DeleteStatementModal({
           <button className="btn btn-danger" onClick={onConfirm}>
             Supprimer
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PreviewModal({
+  filename,
+  url,
+  isImage,
+  onClose,
+  onDownload,
+}: {
+  filename: string;
+  url: string;
+  isImage: boolean;
+  onClose: () => void;
+  onDownload: () => void;
+}) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-preview" onClick={(e) => e.stopPropagation()}>
+        <div className="preview-header">
+          <span className="preview-filename">{filename}</span>
+          <div className="preview-actions">
+            <button className="btn btn-ghost" onClick={onDownload}>
+              Télécharger
+            </button>
+            <button className="icon-btn" title="Fermer" onClick={onClose}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div className="preview-body">
+          {isImage ? (
+            <img src={url} alt={filename} className="preview-img" />
+          ) : (
+            <iframe src={url} title={filename} className="preview-frame" />
+          )}
         </div>
       </div>
     </div>

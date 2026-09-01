@@ -219,7 +219,12 @@ async function maybeDownscaleImage(file: File): Promise<File> {
 /** Adds one more justificatif to a line — several files can cover the same
  *  payment line (e.g. an invoice + a delivery note), so this appends
  *  rather than replaces. */
-export async function attachAsset(statementId: string, lineId: string, rawFile: File, currentAssets: Asset[]) {
+export async function attachAsset(
+  statementId: string,
+  lineId: string,
+  rawFile: File,
+  currentAssets: Asset[]
+): Promise<Asset> {
   const file = await maybeDownscaleImage(rawFile);
   const ext = extOf(file.name, file.type);
   const path = `${lineId}/${uid()}.${ext}`;
@@ -229,6 +234,7 @@ export async function attachAsset(statementId: string, lineId: string, rawFile: 
   if (error) throw error;
   const asset: Asset = { path, filename: rawFile.name, size: file.size, type: file.type };
   await updateDoc(doc(db, "statements", statementId, "lines", lineId), { assets: [...currentAssets, asset] });
+  return asset;
 }
 
 export async function removeAsset(statementId: string, lineId: string, asset: Asset, currentAssets: Asset[]) {

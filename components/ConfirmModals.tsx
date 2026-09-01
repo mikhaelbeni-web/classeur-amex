@@ -45,7 +45,7 @@ export function DeleteStatementModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const withAsset = lines.filter((l) => l.asset).length;
+    const withAsset = lines.reduce((n, l) => n + (l.assets?.length || 0), 0);
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>

@@ -219,9 +219,31 @@ select.status-select.st-manquant { background-color: var(--bad-soft); color: var
   .layout { flex-direction: column; }
   .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--line); display: flex; overflow-x: auto; padding: 8px 10px; gap: 6px; }
   .sidebar-title { display: none; }
-  .statement-item { flex: none; min-width: 128px; padding: 8px 10px; }
-  .statement-item .label { font-size: 0.82rem; }
-  .statement-item .meta { font-size: 0.7rem; }
+
+  /* The month switcher becomes a row of small pills instead of tall
+     stacked cards — one line, compact, the same "chip" look already used
+     for the filters below, so picking a month is a quick tap-scroll
+     instead of a big swipeable slider. */
+  .statement-item {
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    width: auto;
+    min-width: 0;
+    gap: 6px;
+    padding: 7px 13px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+  }
+  .statement-item.active { background: var(--ink); border-color: var(--ink); }
+  .statement-item .row1 { gap: 6px; }
+  .statement-item .label { font-size: 0.8rem; white-space: nowrap; }
+  .statement-item.active .label { color: var(--surface); }
+  .statement-item .meta { display: none; }
+  .statement-item .badge-missing { font-size: 0.64rem; padding: 0 6px; }
+  .statement-item.active .badge-missing { background: rgba(255, 255, 255, 0.2); color: var(--surface); }
+  .statement-item .badge-ok { font-size: 0.78rem; }
 
   .content-toolbar { padding: 12px 14px 10px; }
   .table-wrap { padding: 0 14px 20px; }

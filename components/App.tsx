@@ -12,6 +12,7 @@ import {
   applyImport,
   setLineStatus,
   setLineNote,
+  setLineAssignedToSacha,
   renameStatement,
   deleteStatement,
   attachAsset,
@@ -50,6 +51,9 @@ export default function App() {
   const [statements, setStatements] = useState<Statement[]>([]);
   const [linesByStatement, setLinesByStatement] = useState<Record<string, Line[]>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Cross-month view: shows every line flagged "Sacha Lévy" across every
+  // relevé instead of a single selected statement's lines.
+  const [sachaView, setSachaView] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [modal, setModal] = useState<ModalState>({ type: "none" });
@@ -87,6 +91,25 @@ export default function App() {
 
   const selectedStatement = statements.find((s) => s.id === selectedId) || null;
   const selectedLines = (selectedId && linesByStatement[selectedId]) || [];
+
+  const sachaCount = Object.values(linesByStatement).reduce(
+    (n, lines) => n + lines.filter((l) => l.assignedToSacha).length,
+    0
+  );
+  // Flattened across every relevé — each row remembers which statement it
+  // came from, since writes (justificatif, statut, note…) still need to
+  // target the right one.
+  const sachaRows = useMemo(() => {
+    const rows: { line: Line; statementId: string; statementLabel: string }[] = [];
+    for (const s of statements) {
+      const lines = linesByStatement[s.id] || [];
+      for (const l of lines) {
+        if (l.assignedToSacha) rows.push({ line: l, statementId: s.id, statementLabel: s.label });
+      }
+    }
+    rows.sort((a, b) => a.line.dateRaw.localeCompare(b.line.dateRaw));
+    return rows;
+  }, [statements, linesByStatement]);
 
   const filteredLines = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -180,9 +203,8 @@ export default function App() {
     }
   }
 
-  async function handleAttach(lineId: string, files: File[]) {
-    if (!selectedId) return;
-    const line = selectedLines.find((l) => l.id === lineId);
+  async function handleAttach(statementId: string, lineId: string, files: File[]) {
+    const line = (linesByStatement[statementId] || []).find((l) => l.id === lineId);
     // Uploaded one at a time, on purpose: each write stores the FULL
     // updated list of justificatifs, so the next upload in this same batch
     // must start from what the previous one just produced — not from the
@@ -191,7 +213,7 @@ export default function App() {
     let failures = 0;
     for (const file of files) {
       try {
-        const asset = await attachAsset(selectedId, lineId, file, current);
+        const asset = await attachAsset(statementId, lineId, file, current);
         current = [...current, asset];
       } catch (err) {
         console.error("attachAsset failed:", err);
@@ -207,9 +229,8 @@ export default function App() {
     }
   }
 
-  async function handleRemoveAttach(line: Line, asset: Asset) {
-    if (!selectedId) return;
-    await removeAsset(selectedId, line.id, asset, line.assets || []).catch(() => showToast("Suppression impossible."));
+  async function handleRemoveAttach(statementId: string, line: Line, asset: Asset) {
+    await removeAsset(statementId, line.id, asset, line.assets || []).catch(() => showToast("Suppression impossible."));
   }
 
   /** Shows a justificatif in an in-app preview instead of forcing a
@@ -263,13 +284,14 @@ export default function App() {
     }
   }
 
-  async function handleChangeStatus(lineId: string, status: LineStatus) {
-    if (!selectedId) return;
-    await setLineStatus(selectedId, lineId, status).catch(() => showToast("Enregistrement impossible."));
+  async function handleChangeStatus(statementId: string, lineId: string, status: LineStatus) {
+    await setLineStatus(statementId, lineId, status).catch(() => showToast("Enregistrement impossible."));
   }
-  async function handleEditNote(lineId: string, note: string) {
-    if (!selectedId) return;
-    await setLineNote(selectedId, lineId, note).catch(() => showToast("Enregistrement impossible."));
+  async function handleEditNote(statementId: string, lineId: string, note: string) {
+    await setLineNote(statementId, lineId, note).catch(() => showToast("Enregistrement impossible."));
+  }
+  async function handleToggleSacha(statementId: string, lineId: string, value: boolean) {
+    await setLineAssignedToSacha(statementId, lineId, value).catch(() => showToast("Enregistrement impossible."));
   }
 
   async function handleRename(label: string) {
@@ -336,18 +358,72 @@ export default function App() {
       <div className="layout">
         <Sidebar
           statements={statements}
-          selectedId={selectedId}
+          selectedId={sachaView ? null : selectedId}
           missingCounts={missingCounts}
           lineCounts={lineCounts}
+          sachaCount={sachaCount}
+          sachaActive={sachaView}
           onSelect={(id) => {
+            setSachaView(false);
             setSelectedId(id);
             setSearchTerm("");
             setFilter("all");
           }}
+          onSelectSacha={() => setSachaView(true)}
         />
 
         <main className="content">
-          {!selectedStatement ? (
+          {sachaView ? (
+            <>
+              <div className="content-toolbar">
+                <div className="content-title-group">
+                  <h2>Sacha Lévy</h2>
+                </div>
+              </div>
+              <div className="table-wrap">
+                {sachaRows.length ? (
+                  <table className="lines">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 90 }}>Relevé</th>
+                        <th style={{ width: 70 }}>Date</th>
+                        <th>Libellé</th>
+                        <th className="num" style={{ width: 100 }}>
+                          Débit
+                        </th>
+                        <th className="num" style={{ width: 100 }}>
+                          Crédit
+                        </th>
+                        <th style={{ width: 200 }}>Justificatif</th>
+                        <th style={{ width: 130 }}>Assigné</th>
+                        <th style={{ width: 150 }}>Statut</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sachaRows.map(({ line: l, statementId, statementLabel }) => (
+                        <LineRow
+                          key={`${statementId}-${l.id}`}
+                          line={l}
+                          statementLabel={statementLabel}
+                          onAttach={(lineId, files) => handleAttach(statementId, lineId, files)}
+                          onRemoveAttach={(line, asset) => handleRemoveAttach(statementId, line, asset)}
+                          onViewAttach={handleViewAttach}
+                          onDownloadAttach={handleDownloadAttach}
+                          onChangeStatus={(lineId, status) => handleChangeStatus(statementId, lineId, status)}
+                          onEditNote={(lineId, note) => handleEditNote(statementId, lineId, note)}
+                          onToggleSacha={(lineId, value) => handleToggleSacha(statementId, lineId, value)}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="empty-state">
+                    <p>Aucune facture assignée à Sacha Lévy pour l’instant. Clique sur « Sacha Lévy » sur une ligne pour l’ajouter ici.</p>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : !selectedStatement ? (
             <div className="empty-state">
               <div className="display">{statements.length ? "Sélectionne un relevé" : "Aucun relevé pour l’instant"}</div>
               <p>
@@ -422,6 +498,7 @@ export default function App() {
                           Crédit
                         </th>
                         <th style={{ width: 200 }}>Justificatif</th>
+                        <th style={{ width: 130 }}>Assigné</th>
                         <th style={{ width: 150 }}>Statut</th>
                       </tr>
                     </thead>
@@ -430,12 +507,13 @@ export default function App() {
                         <LineRow
                           key={l.id}
                           line={l}
-                          onAttach={handleAttach}
-                          onRemoveAttach={handleRemoveAttach}
+                          onAttach={(lineId, files) => handleAttach(selectedId as string, lineId, files)}
+                          onRemoveAttach={(line, asset) => handleRemoveAttach(selectedId as string, line, asset)}
                           onViewAttach={handleViewAttach}
                           onDownloadAttach={handleDownloadAttach}
-                          onChangeStatus={handleChangeStatus}
-                          onEditNote={handleEditNote}
+                          onChangeStatus={(lineId, status) => handleChangeStatus(selectedId as string, lineId, status)}
+                          onEditNote={(lineId, note) => handleEditNote(selectedId as string, lineId, note)}
+                          onToggleSacha={(lineId, value) => handleToggleSacha(selectedId as string, lineId, value)}
                         />
                       ))}
                     </tbody>

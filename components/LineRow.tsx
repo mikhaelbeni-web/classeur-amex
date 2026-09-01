@@ -23,6 +23,10 @@ interface Props {
   onDownloadAttach: (asset: Asset) => void;
   onChangeStatus: (lineId: string, status: LineStatus) => void;
   onEditNote: (lineId: string, note: string) => void;
+  onToggleSacha: (lineId: string, value: boolean) => void;
+  /** Set only in the cross-month "Sacha Lévy" view, where rows come from
+   *  several different relevés — shows which one this line belongs to. */
+  statementLabel?: string;
 }
 
 function AttachChip({
@@ -88,7 +92,17 @@ function AttachChip({
   );
 }
 
-export default function LineRow({ line, onAttach, onRemoveAttach, onViewAttach, onDownloadAttach, onChangeStatus, onEditNote }: Props) {
+export default function LineRow({
+  line,
+  onAttach,
+  onRemoveAttach,
+  onViewAttach,
+  onDownloadAttach,
+  onChangeStatus,
+  onEditNote,
+  onToggleSacha,
+  statementLabel,
+}: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [noteValue, setNoteValue] = useState(line.note || "");
@@ -116,6 +130,11 @@ export default function LineRow({ line, onAttach, onRemoveAttach, onViewAttach, 
 
   return (
     <tr>
+      {statementLabel ? (
+        <td className="mono" data-label="Relevé">
+          {statementLabel}
+        </td>
+      ) : null}
       <td className="mono" data-label="Date">
         {fmtEntryDate(line.dateRaw)}
       </td>
@@ -168,6 +187,16 @@ export default function LineRow({ line, onAttach, onRemoveAttach, onViewAttach, 
             onChange={handleFileChosen}
           />
         </div>
+      </td>
+      <td data-label="Assigné">
+        <button
+          type="button"
+          className={`sacha-toggle ${line.assignedToSacha ? "active" : ""}`}
+          onClick={() => onToggleSacha(line.id, !line.assignedToSacha)}
+          title={line.assignedToSacha ? "Retirer de la liste de Sacha Lévy" : "Assigner à Sacha Lévy"}
+        >
+          Sacha Lévy
+        </button>
       </td>
       <td data-label="Statut">
         <select

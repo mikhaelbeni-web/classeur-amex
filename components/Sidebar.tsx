@@ -8,11 +8,33 @@ interface Props {
   missingCounts: Record<string, number>;
   lineCounts: Record<string, number>;
   onSelect: (id: string) => void;
+  sachaCount: number;
+  sachaActive: boolean;
+  onSelectSacha: () => void;
 }
 
-export default function Sidebar({ statements, selectedId, missingCounts, lineCounts, onSelect }: Props) {
+export default function Sidebar({
+  statements,
+  selectedId,
+  missingCounts,
+  lineCounts,
+  onSelect,
+  sachaCount,
+  sachaActive,
+  onSelectSacha,
+}: Props) {
   return (
     <aside className="sidebar">
+      <button
+        className={`statement-item sacha-item ${sachaActive ? "active" : ""}`}
+        onClick={onSelectSacha}
+      >
+        <div className="row1">
+          <span className="label">Sacha Lévy</span>
+          {sachaCount > 0 && <span className="badge-missing">{sachaCount}</span>}
+        </div>
+        <div className="meta">Toutes les factures assignées</div>
+      </button>
       <div className="sidebar-title">Relevés</div>
       {statements.map((s) => {
         const missing = missingCounts[s.id] ?? 0;

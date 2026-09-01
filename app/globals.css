@@ -117,6 +117,7 @@ a { color: var(--accent); }
 .statement-item .meta { font-size: 0.75rem; color: var(--ink-muted); }
 .badge-missing { font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; font-weight: 600; background: var(--warn-soft); color: var(--warn); border-radius: 999px; padding: 1px 7px; }
 .badge-ok { color: var(--good); }
+.sacha-item { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 
 .content { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .content-toolbar { display: flex; align-items: center; gap: 12px; padding: 16px 22px 12px; flex-wrap: wrap; }
@@ -160,6 +161,13 @@ td.amount-credit { color: var(--good); font-weight: 600; }
 .add-attach-btn:hover { border-color: var(--accent); color: var(--accent); }
 .add-attach-btn:disabled { opacity: 0.5; cursor: wait; }
 
+.sacha-toggle {
+  padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface);
+  font-size: 0.76rem; font-weight: 600; color: var(--ink-muted); cursor: pointer; white-space: nowrap;
+}
+.sacha-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.sacha-toggle.active { background: var(--accent-soft); border-color: var(--accent-soft-line); color: var(--accent); }
+
 select.status-select { appearance: none; border: 1px solid transparent; border-radius: 999px; padding: 6px 12px; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
 select.status-select.st-attente { background-color: var(--surface-2); color: var(--ink-muted); border-color: var(--line-strong); }
 select.status-select.st-recu { background-color: var(--good-soft); color: var(--good); }
@@ -186,11 +194,6 @@ select.status-select.st-manquant { background-color: var(--bad-soft); color: var
 .preview-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .preview-filename { font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .preview-actions { display: flex; align-items: center; gap: 8px; flex: none; }
-/* Deliberately NOT a centering flexbox: when content is taller than this
-   box, align-items:center leaves its top portion unreachable by scrolling
-   in most browsers (a well-known flexbox+overflow quirk) — this is exactly
-   what was cutting off the top of tall justificatifs. Plain block scrolling
-   always starts at the top and lets you reach the whole content. */
 .preview-body { flex: 1; min-height: 0; background: var(--surface-2); overflow: auto; padding: 16px; }
 .preview-img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; margin: 0 auto; }
 .pdf-pages { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; }
@@ -207,9 +210,6 @@ select.status-select.st-manquant { background-color: var(--bad-soft); color: var
 .toast { background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 999px; font-size: 0.84rem; font-weight: 500; box-shadow: var(--shadow); }
 
 @media (max-width: 760px) {
-  /* Topbar: let it wrap onto a second line instead of forcing a horizontal
-     scrollbar — on an iPhone-width screen, brand + stat pills + both
-     buttons never fit on one row. */
   .topbar { flex-wrap: wrap; padding: 10px 14px; row-gap: 8px; }
   .brand { width: 100%; margin-right: 0; }
   .brand h1 { font-size: 1.12rem; }
@@ -220,10 +220,6 @@ select.status-select.st-manquant { background-color: var(--bad-soft); color: var
   .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--line); display: flex; overflow-x: auto; padding: 8px 10px; gap: 6px; }
   .sidebar-title { display: none; }
 
-  /* The month switcher becomes a row of small pills instead of tall
-     stacked cards — one line, compact, the same "chip" look already used
-     for the filters below, so picking a month is a quick tap-scroll
-     instead of a big swipeable slider. */
   .statement-item {
     flex: none;
     flex-direction: row;
@@ -244,14 +240,11 @@ select.status-select.st-manquant { background-color: var(--bad-soft); color: var
   .statement-item .badge-missing { font-size: 0.64rem; padding: 0 6px; }
   .statement-item.active .badge-missing { background: rgba(255, 255, 255, 0.2); color: var(--surface); }
   .statement-item .badge-ok { font-size: 0.78rem; }
+  .sacha-item { margin-bottom: 0; padding-bottom: 7px; border-bottom: none; border-right: 1px solid var(--line); padding-right: 13px; margin-right: 4px; }
 
   .content-toolbar { padding: 12px 14px 10px; }
   .table-wrap { padding: 0 14px 20px; }
 
-  /* The 6-column table doesn't fit an iPhone screen at any font size, so
-     below this width it stops being a table altogether: each row becomes
-     its own card, and each cell stacks as a labelled value (the label
-     comes from data-label, set in LineRow.tsx) instead of a column. */
   table.lines,
   table.lines thead,
   table.lines tbody,

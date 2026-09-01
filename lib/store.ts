@@ -147,6 +147,13 @@ export async function setLineNote(statementId: string, lineId: string, note: str
   await updateDoc(doc(db, "statements", statementId, "lines", lineId), { note });
 }
 
+/** Flags/unflags a line as "to be entered by Sacha Lévy" — a dedicated
+ *  boolean rather than reusing the free-text note field, so the cross-month
+ *  "Sacha Lévy" view can filter reliably instead of matching on text. */
+export async function setLineAssignedToSacha(statementId: string, lineId: string, value: boolean) {
+  await updateDoc(doc(db, "statements", statementId, "lines", lineId), { assignedToSacha: value });
+}
+
 export async function renameStatement(statementId: string, label: string) {
   await updateDoc(doc(db, "statements", statementId), { label });
 }

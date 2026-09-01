@@ -186,9 +186,14 @@ select.status-select.st-manquant { background-color: var(--bad-soft); color: var
 .preview-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .preview-filename { font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .preview-actions { display: flex; align-items: center; gap: 8px; flex: none; }
-.preview-body { flex: 1; min-height: 0; background: var(--surface-2); display: flex; align-items: center; justify-content: center; overflow: auto; }
-.preview-img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.pdf-pages { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 16px; width: 100%; }
+/* Deliberately NOT a centering flexbox: when content is taller than this
+   box, align-items:center leaves its top portion unreachable by scrolling
+   in most browsers (a well-known flexbox+overflow quirk) — this is exactly
+   what was cutting off the top of tall justificatifs. Plain block scrolling
+   always starts at the top and lets you reach the whole content. */
+.preview-body { flex: 1; min-height: 0; background: var(--surface-2); overflow: auto; padding: 16px; }
+.preview-img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; margin: 0 auto; }
+.pdf-pages { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; }
 .pdf-page { max-width: 100%; height: auto; box-shadow: var(--shadow); background: #fff; }
 .pdf-error { color: var(--ink-muted); font-size: 0.88rem; padding: 30px; text-align: center; }
 .import-groups { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; max-height: 260px; overflow-y: auto; }

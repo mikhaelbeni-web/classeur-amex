@@ -147,10 +147,13 @@ table.lines td { padding: 11px 10px; font-size: 0.87rem; vertical-align: top; }
 td.amount-debit { color: var(--ink); font-weight: 600; }
 td.amount-credit { color: var(--good); font-weight: 600; }
 
+.attach-list { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
 .attach-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 190px; padding: 5px 9px 5px 7px; border-radius: 7px; background: var(--surface-2); border: 1px solid var(--line); font-size: 0.78rem; }
 .attach-chip .fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: none; background: none; color: inherit; font: inherit; padding: 0; cursor: pointer; text-align: left; }
 .attach-chip .fname:hover { color: var(--accent); text-decoration: underline; }
 .attach-chip .thumb { width: 18px; height: 18px; border-radius: 3px; object-fit: cover; flex: none; }
+.attach-chip .dl { color: var(--ink-faint); flex: none; padding: 2px; border-radius: 4px; border: none; background: none; cursor: pointer; }
+.attach-chip .dl:hover { color: var(--accent); }
 .attach-chip .remove { color: var(--ink-faint); flex: none; padding: 2px; border-radius: 4px; border: none; background: none; cursor: pointer; }
 .attach-chip .remove:hover { color: var(--bad); background: var(--bad-soft); }
 .add-attach-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 7px; border: 1px dashed var(--line-strong); background: none; color: var(--ink-muted); font-size: 0.78rem; font-weight: 600; cursor: pointer; }

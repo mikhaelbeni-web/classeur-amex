@@ -57,7 +57,11 @@ export function subscribeAllLines(cb: (linesByStatement: Record<string, Line[]>)
     for (const d of snap.docs) {
       const statementId = d.ref.parent.parent?.id;
       if (!statementId) continue;
-      const line = { id: d.id, ...(d.data() as Omit<Line, "id">) } as Line;
+      const data = d.data() as Omit<Line, "id" | "assets"> & { assets?: Asset[]; asset?: Asset | null };
+      // Backward-compat: lines written before multi-justificatif support
+      // stored a single "asset" field instead of an "assets" array.
+      const assets = data.assets ?? (data.asset ? [data.asset] : []);
+      const line = { id: d.id, ...data, assets } as Line;
       (grouped[statementId] ||= []).push(line);
     }
     for (const lines of Object.values(grouped)) {
@@ -100,11 +104,12 @@ export async function applyImport(groups: ImportPreviewGroup[]): Promise<number>
     const newLines = g.lines.filter((l) => !existingFps.has(lineFingerprint(l)));
     if (!newLines.length) continue;
 
-        const batch = writeBatch(db);
+    const batch = writeBatch(db);
     const statementRef = doc(db, "statements", g.id);
-    // Firestore rejette une valeur de champ `undefined` explicite, donc on
-    // n'inclut "importedAt" dans l'écriture que quand il a une vraie valeur
-    // (premier import de ce relevé) — sinon ça plante à chaque réimport.
+    // Firestore rejects an explicit `undefined` field value outright, so
+    // `importedAt` is only included in the write when it actually has a
+    // value (i.e. on first import of this statement) — this used to crash
+    // every re-import of an existing statement.
     const statementData: Record<string, unknown> = { label: g.label, year: g.year, month: g.month };
     if (linesSnap.empty) statementData.importedAt = serverTimestamp();
     batch.set(statementRef, statementData, { merge: true });
@@ -120,7 +125,7 @@ export async function applyImport(groups: ImportPreviewGroup[]): Promise<number>
         credit: l.credit,
         status: "attente" as LineStatus,
         note: "",
-        asset: null,
+        assets: [],
         createdAt: serverTimestamp(),
       });
     }
@@ -147,7 +152,7 @@ export async function renameStatement(statementId: string, label: string) {
 }
 
 export async function deleteStatement(statementId: string, lines: Line[]) {
-  const paths = lines.filter((l) => l.asset).map((l) => l.asset!.path);
+  const paths = lines.flatMap((l) => (l.assets || []).map((a) => a.path));
   if (paths.length) {
     await supabase.storage.from(JUSTIFICATIFS_BUCKET).remove(paths).catch(() => {});
   }
@@ -211,7 +216,10 @@ async function maybeDownscaleImage(file: File): Promise<File> {
   });
 }
 
-export async function attachAsset(statementId: string, lineId: string, rawFile: File, previousAsset: Asset | null) {
+/** Adds one more justificatif to a line — several files can cover the same
+ *  payment line (e.g. an invoice + a delivery note), so this appends
+ *  rather than replaces. */
+export async function attachAsset(statementId: string, lineId: string, rawFile: File, currentAssets: Asset[]) {
   const file = await maybeDownscaleImage(rawFile);
   const ext = extOf(file.name, file.type);
   const path = `${lineId}/${uid()}.${ext}`;
@@ -219,16 +227,14 @@ export async function attachAsset(statementId: string, lineId: string, rawFile: 
     .from(JUSTIFICATIFS_BUCKET)
     .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
   if (error) throw error;
-  if (previousAsset) {
-    await supabase.storage.from(JUSTIFICATIFS_BUCKET).remove([previousAsset.path]).catch(() => {});
-  }
   const asset: Asset = { path, filename: rawFile.name, size: file.size, type: file.type };
-  await updateDoc(doc(db, "statements", statementId, "lines", lineId), { asset });
+  await updateDoc(doc(db, "statements", statementId, "lines", lineId), { assets: [...currentAssets, asset] });
 }
 
-export async function removeAsset(statementId: string, lineId: string, asset: Asset) {
+export async function removeAsset(statementId: string, lineId: string, asset: Asset, currentAssets: Asset[]) {
   await supabase.storage.from(JUSTIFICATIFS_BUCKET).remove([asset.path]).catch(() => {});
-  await updateDoc(doc(db, "statements", statementId, "lines", lineId), { asset: null });
+  const assets = currentAssets.filter((a) => a.path !== asset.path);
+  await updateDoc(doc(db, "statements", statementId, "lines", lineId), { assets });
 }
 
 /** Fetches a justificatif's bytes through the Supabase Storage SDK. Note:

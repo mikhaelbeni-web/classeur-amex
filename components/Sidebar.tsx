@@ -38,5 +38,5 @@ export default function Sidebar({ statements, selectedId, missingCounts, lineCou
 }
 
 export function missingCountFor(lines: Line[]): number {
-  return lines.filter((l) => !l.asset).length;
+  return lines.filter((l) => !l.assets?.length).length;
 }

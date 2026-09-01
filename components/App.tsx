@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import type { Line, LineStatus, Statement, ParsedLine } from "@/lib/types";
+import type { Asset, Line, LineStatus, Statement, ParsedLine } from "@/lib/types";
 import { parseWorkbook, groupIntoStatements } from "@/lib/xlsxParse";
 import { parseAmexPdf } from "@/lib/pdfParse";
 import {
@@ -60,10 +60,10 @@ export default function App() {
   }
 
   const totalLines = Object.values(linesByStatement).reduce((a, l) => a + l.length, 0);
-  const totalMissing = Object.values(linesByStatement).reduce((a, l) => a + l.filter((x) => !x.asset).length, 0);
+  const totalMissing = Object.values(linesByStatement).reduce((a, l) => a + l.filter((x) => !x.assets?.length).length, 0);
   const missingCounts = useMemo(() => {
     const out: Record<string, number> = {};
-    for (const [id, lines] of Object.entries(linesByStatement)) out[id] = lines.filter((l) => !l.asset).length;
+    for (const [id, lines] of Object.entries(linesByStatement)) out[id] = lines.filter((l) => !l.assets?.length).length;
     return out;
   }, [linesByStatement]);
   const lineCounts = useMemo(() => {
@@ -78,7 +78,7 @@ export default function App() {
   const filteredLines = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return selectedLines.filter((l) => {
-      if (filter === "noattach" && l.asset) return false;
+      if (filter === "noattach" && l.assets?.length) return false;
       if (filter === "manquant" && l.status !== "manquant") return false;
       if (
         term &&
@@ -159,7 +159,7 @@ export default function App() {
       if (firstNew) setSelectedId(firstNew.id);
       setModal({ type: "none" });
       showToast(`${total} nouvelle${total > 1 ? "s" : ""} ligne${total > 1 ? "s" : ""} importée${total > 1 ? "s" : ""}.`);
-        } catch (err) {
+    } catch (err) {
       console.error("applyImport failed:", err);
       showToast("L'import a échoué — réessaie.");
     } finally {
@@ -171,29 +171,55 @@ export default function App() {
     if (!selectedId) return;
     const line = selectedLines.find((l) => l.id === lineId);
     try {
-      await attachAsset(selectedId, lineId, file, line?.asset || null);
+      await attachAsset(selectedId, lineId, file, line?.assets || []);
     } catch (err) {
       console.error("attachAsset failed:", err);
       showToast("Envoi du justificatif impossible — réessaie.");
     }
   }
 
-  async function handleRemoveAttach(line: Line) {
-    if (!selectedId || !line.asset) return;
-    await removeAsset(selectedId, line.id, line.asset).catch(() => showToast("Suppression impossible."));
+  async function handleRemoveAttach(line: Line, asset: Asset) {
+    if (!selectedId) return;
+    await removeAsset(selectedId, line.id, asset, line.assets || []).catch(() => showToast("Suppression impossible."));
   }
 
-  async function handleViewAttach(line: Line) {
-    if (!line.asset) return;
+  /** Opens a justificatif for preview in a new tab (PDFs and images both
+   *  display inline in the browser) — no forced download. The tab has to
+   *  be opened synchronously, before the async fetch, or popup blockers
+   *  kill it; we then point that already-open tab at the blob once ready. */
+  async function handleViewAttach(asset: Asset) {
+    const win = window.open("", "_blank");
     try {
-      const blob = await fetchAssetBlob(line.asset.path);
+      const blob = await fetchAssetBlob(asset.path);
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = line.asset.filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      if (win) {
+        win.location.href = url;
+      } else {
+        // Popup was blocked outright — fall back to a download so the
+        // click isn't a dead end.
+        handleDownloadBlob(url, asset.filename);
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      win?.close();
+      showToast("Aperçu impossible.");
+    }
+  }
+
+  function handleDownloadBlob(url: string, filename: string) {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  async function handleDownloadAttach(asset: Asset) {
+    try {
+      const blob = await fetchAssetBlob(asset.path);
+      const url = URL.createObjectURL(blob);
+      handleDownloadBlob(url, asset.filename);
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch {
       showToast("Téléchargement impossible.");
@@ -370,6 +396,7 @@ export default function App() {
                           onAttach={handleAttach}
                           onRemoveAttach={handleRemoveAttach}
                           onViewAttach={handleViewAttach}
+                          onDownloadAttach={handleDownloadAttach}
                           onChangeStatus={handleChangeStatus}
                           onEditNote={handleEditNote}
                         />

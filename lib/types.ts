@@ -18,7 +18,7 @@ export interface Line {
   credit: number | null;
   status: LineStatus;
   note: string;
-  asset: Asset | null;
+  assets: Asset[]; // several justificatifs can cover one payment line
   createdAt?: unknown; // Firestore server timestamp
 }
 

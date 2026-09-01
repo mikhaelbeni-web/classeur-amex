@@ -19,6 +19,7 @@ export interface Line {
   status: LineStatus;
   note: string;
   assets: Asset[]; // several justificatifs can cover one payment line
+  assignedToSacha?: boolean; // flagged as "to be entered by Sacha Lévy"
   createdAt?: unknown; // Firestore server timestamp
 }
 

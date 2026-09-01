@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Line, Statement } from "@/lib/types";
+import PdfViewer from "./PdfViewer";
 
 export function RenameModal({
   statement,
@@ -69,14 +70,16 @@ export function DeleteStatementModal({
 
 export function PreviewModal({
   filename,
-  url,
   isImage,
+  url,
+  pdfData,
   onClose,
   onDownload,
 }: {
   filename: string;
-  url: string;
   isImage: boolean;
+  url?: string;
+  pdfData?: ArrayBuffer;
   onClose: () => void;
   onDownload: () => void;
 }) {
@@ -97,10 +100,12 @@ export function PreviewModal({
           </div>
         </div>
         <div className="preview-body">
-          {isImage ? (
+          {isImage && url ? (
             <img src={url} alt={filename} className="preview-img" />
+          ) : pdfData ? (
+            <PdfViewer data={pdfData} />
           ) : (
-            <iframe src={url} title={filename} className="preview-frame" />
+            <div className="pdf-error">Aperçu indisponible.</div>
           )}
         </div>
       </div>
